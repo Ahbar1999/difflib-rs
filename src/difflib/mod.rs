@@ -1,4 +1,18 @@
-// single file codebase for all of difflib-go port
+// Package difflib is a partial port of Python difflib module.
+//
+// It provides tools to compare sequences of strings and generate textual diffs.
+//
+// The following class and functions have been ported:
+//
+// - SequenceMatcher
+//
+// - unified_diff
+//
+// - context_diff
+//
+// Getting unified diffs was the main goal of the port. Keep in mind this code
+// is mostly suitable to output text differences in a human friendly way.
+
 use std::collections::{HashMap};
 use std::cmp::{max, min};
 
@@ -574,18 +588,18 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     // Unified diff parameters
 }
 
-pub struct UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_this> {
-    pub a:          Option<&'life_of_this Vec<&'life_of_a str>>,     // first sequence line 
+pub struct UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_self> {
+    pub a:          Option<&'life_of_self Vec<&'life_of_a str>>,     // first sequence line 
     pub from_file:  String,
     pub from_date:  String,
-    pub b:          Option<&'life_of_this Vec<&'life_of_b str>>,
+    pub b:          Option<&'life_of_self Vec<&'life_of_b str>>,
     pub to_file:    String,
     pub to_date:    String,
     pub eol:        String,
     pub context:    usize
 }
 
-impl<'life_of_a, 'life_of_b, 'life_of_this> UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_this> {
+impl<'life_of_a, 'life_of_b, 'life_of_self> UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_self> {
     fn new() -> Self {
         Self {
             a: None,
@@ -725,5 +739,129 @@ pub fn get_unified_diff_string(diff: &mut UnifiedDiff) -> Result<String, std::io
 }
 
 fn format_range_context(start: usize, stop: usize) -> String {
-    unimplemented!()
+   // Per the diff spec at http://www.unix.org/single_unix_specification/
+	let mut beginning = start + 1; // lines start numbering with one
+	let length= stop - start;
+	if length == 0 {
+		beginning -= 1; // empty ranges begin at line just before the range
+	}
+	if length <= 1 {
+		return format!("{}", beginning);
+	}
+
+	format!("{},{}", beginning, beginning+length-1) 
 }
+
+type ContextDiff<'life_of_a, 'life_of_b, 'life_of_self> = UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_self>;
+
+// Compare two sequences of lines; generate the delta as a context diff.
+//
+// Context diffs are a compact way of showing line changes and a few
+// lines of context. The number of context lines is set by diff.Context
+// which defaults to three.
+//
+// By default, the diff control lines (those with *** or ---) are
+// created with a trailing newline.
+//
+// For inputs that do not have trailing newlines, set the diff.Eol
+// argument to "" so that the output will be uniformly newline free.
+//
+// The context diff format normally has a header for filenames and
+// modification times.  Any or all of these may be specified using
+// strings for diff.FromFile, diff.ToFile, diff.FromDate, diff.ToDate.
+// The modification times are normally expressed in the ISO 8601 format.
+// If not specified, the strings default to blanks.
+
+fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -> Result<(), std::io::Error> {
+	
+    if diff.eol.len() == 0 {
+		diff.eol = "\n".to_owned();
+	}
+
+	let prefix = crate::map!{
+		b'i' => "+ ",
+		b'd' => "- ",
+		b'r' => "! ",
+		b'e' => "  ",
+	};
+
+	let mut started= false;
+	let mut m = SequenceMatcher::new(
+        diff.a.as_ref().unwrap().to_vec(), 
+        diff.b.as_ref().unwrap().to_vec());
+    
+	for g in m.get_grouped_op_codes(diff.context).iter() {
+		if !started {
+			started = true;
+			let mut from_date = "".to_owned();
+			if diff.from_date.len() > 0 {
+				from_date = "\t".to_owned() + &diff.from_date;
+			}
+
+			let mut to_date = "".to_owned();
+			if diff.to_date.len() > 0 {
+				to_date = "\t".to_owned() + &diff.to_date;
+			}
+
+			if diff.from_file != "" || diff.to_file != "" {
+				writer.write(format!("*** {}{}{}", diff.from_file, from_date, diff.eol).as_bytes())?;
+                
+				writer.write(format!("--- {}{}{}", diff.to_file, to_date, diff.eol).as_bytes())?;
+			}
+		}
+
+		let first= &g[0];
+        let last = g.last().unwrap();
+
+		writer.write(format!("***************").as_bytes())?;
+		
+        let range1 = format_range_context(first.i1, last.i2);
+
+		writer.write(format!("*** {} ****{}", range1, diff.eol).as_bytes())?;
+		
+        for c in g.iter() {
+			if c.tag == b'r' || c.tag == b'd' {
+				for cc in g.iter() {
+					if cc.tag == b'i' {
+						continue;
+					}
+					for line in &diff.a.as_ref().unwrap()[cc.i1..cc.i2] {
+		                writer.write(format!("{}", prefix[&cc.tag].to_owned() + &line).as_bytes())?;
+					}
+				}
+				break;
+			}
+		}
+
+		let range2 = format_range_context(first.j1, last.j2);
+		// wf("--- %s ----%s", range2, diff.Eol)
+        writer.write(format!("--- {} ----{}", range2, diff.eol).as_bytes())?;
+
+		for c in g.iter() {
+			if c.tag == b'r' || c.tag == b'i' {
+				for cc in g.iter() {
+					if cc.tag == b'd' {
+						continue;
+					}
+					for line in &diff.b.as_ref().unwrap()[cc.j1..cc.j2] {
+					    writer.write(format!("{}", prefix[&cc.tag].to_owned() + &line).as_bytes())?;	
+					}
+				}
+				break;
+			}
+		}
+	}
+	
+    Ok(()) 
+}
+
+// Like write_context_diff but returns the diff a string.
+fn get_context_diff_string(diff: &mut ContextDiff) -> Result<String, std::io::Error> {
+    let mut buf = std::io::BufWriter::new(Vec::<u8>::new());
+
+    write_unified_diff(&mut buf, diff)?;
+        
+    Ok(String::from_utf8( buf.into_inner().ok().unwrap()).expect("Found invalid utf-8 string"))
+}
+
+
