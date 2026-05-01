@@ -32,12 +32,12 @@ impl Match {
     }
 }
 
-struct OpCode {
-    tag: u8,
-    i1: usize,
-    i2: usize,
-    j1: usize,
-    j2: usize,
+pub struct OpCode {
+    pub tag: u8,
+    pub i1: usize,
+    pub i2: usize,
+    pub j1: usize,
+    pub j2: usize,
 }
 
 impl OpCode { 
@@ -70,7 +70,7 @@ fn split_lines(s: &str) -> Vec<&str> {
     lines
 }
 
-struct SequenceMatcher<'life_of_a, 'life_of_b> {
+pub struct SequenceMatcher<'life_of_a, 'life_of_b> {
     a: Option<Vec<&'life_of_a str>>,
     b: Option<Vec<&'life_of_b str>>,
     b2j: HashMap<&'life_of_b str, Vec<usize>>,          // line -> index mapping for b sequence
@@ -101,7 +101,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             op_codes: Vec::new()
         };
 
-        m.set_seqs(_a.clone(), _b.clone());
+        m.set_seqs(_a, _b);
 
         m
     }
@@ -112,7 +112,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     } 
 
     fn set_seq1(&mut self, a: Vec<&'life_of_a str>) {
-        if a == *self.a.as_ref().unwrap() {
+        if self.a.is_some() && a == *self.a.as_ref().unwrap() {
             return;
         }
 
@@ -122,7 +122,8 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     }
      
     fn set_seq2(&mut self, b: Vec<&'life_of_b str>) {
-        if b == *self.b.as_ref().unwrap() {
+        // println!("seq_seq2() b: {:?}", &b);
+        if self.b.is_some() && b == *self.b.as_ref().unwrap() {
             return;
         }
 
@@ -154,7 +155,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         }
 
         // remove junk elements if is_junk detector was provided
-        if !self.is_junk.is_some() {
+        if self.is_junk.is_some() {
             // store junks separately  
             for (s, _) in self.b2j.iter() {
                 // call is_junk(s)
@@ -192,8 +193,8 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     }
     
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> Match {
-        let mut besti: usize =0;
-        let mut bestj: usize =0;
+        let mut besti: isize = alo as isize;
+        let mut bestj: isize = blo as isize;
         let mut bestsize: usize =0;
         
         /*
@@ -207,23 +208,28 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             // look at all instances of a[i] in b; note that because
             // b2j has no junk keys, the loop is skipped if a[i] is junk
             let mut newj2len = HashMap::new();
+            
+            self.a.as_ref().map(|val| {
+                self.b2j.get(val[i]).map(|indices| {
+                    for &j in indices {
+                        if j < blo {
+                            continue;
+                        }
+                        if j >= bhi {
+                           break; 
+                        }
 
-            for j in self.b2j[self.a.as_ref().unwrap()[i]].iter() {
-                if *j < blo {
-                    continue;
-                }
-                if *j >= bhi {
-                    break; 
-                }
-
-                let k = j2len[&(j -1)] + 1;
-                newj2len.insert(*j, k);
-                if k > bestsize {
-                    besti = i - k +1;
-                    bestj = *j - k+  1;
-                    bestsize = k;
-                } 
-            }
+                        let k = j2len.get(&j.wrapping_sub(1)).or_else( || Some(&0) ).unwrap() + 1;
+                        newj2len.insert(j, k);
+                        if k > bestsize {
+                            besti = i - k +1;
+                            bestj = j - k+ 1;
+                            bestsize = k;
+                        } 
+                    }
+                });
+            });
+            
             j2len = newj2len;
         }
 
@@ -236,8 +242,17 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             && bestj > blo 
             && !self.is_b_junk(self.b.as_ref().unwrap()[bestj - 1])
             && self.a.as_ref().unwrap()[besti - 1] == self.b.as_ref().unwrap()[bestj - 1] {
+            besti -= 1;
+            bestj -= 1;
             bestsize += 1;    
         }
+
+        while besti + bestsize < ahi 
+            && bestj + bestsize < bhi 
+            && !self.is_b_junk(self.b.as_ref().unwrap()[bestj + bestsize])
+            && self.a.as_ref().unwrap()[besti + bestsize] == self.b.as_ref().unwrap()[bestj + bestsize] {
+            bestsize += 1;
+        } 
 
         // Now that we have a wholly interesting match (albeit possibly
         // empty!), we may as well suck up the matching junk on each
@@ -246,14 +261,17 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         // figuring out what to do with it.  In the case of an empty
         // interesting match, this is clearly the right thing to do,
         // because no other kind of match is possible in the regions.
-        while besti > alo && bestj > blo && self.is_b_junk(self.b.as_ref().unwrap()[bestj - 1]) 
+        while besti > alo 
+            && bestj > blo 
+            && self.is_b_junk(self.b.as_ref().unwrap()[bestj - 1]) 
             && self.a.as_ref().unwrap()[besti - 1] == self.b.as_ref().unwrap()[bestj - 1] {
             besti -= 1;
             bestj -= 1;
             bestsize += 1;
         }  
 
-        while besti + bestsize < ahi && bestj + bestsize < bhi 
+        while besti + bestsize < ahi 
+            && bestj + bestsize < bhi 
             && self.is_b_junk(self.b.as_ref().unwrap()[bestj + bestsize])
             && self.a.as_ref().unwrap()[besti + bestsize] == self.b.as_ref().unwrap()[bestj + bestsize] {
             bestsize += 1; 
@@ -315,8 +333,8 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         let mut non_adjacent = Vec::new();
 
         let mut i1 = 0 as usize;
-        let mut j1 = i1;
-        let mut k1 = j1;
+        let mut j1 = 0 as usize;
+        let mut k1 = 0 as usize;
 
         for b in matched.iter() {
             // Is this block adjacent to i1, j1, k1?
@@ -379,12 +397,13 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     // 'i' (insert):   b[j1:j2] should be inserted at a[i1:i1], i1==i2 in this case.
     //
     // 'e' (equal):    a[i1:i2] == b[j1:j2]
-    fn get_op_codes(&mut self) -> &Vec<OpCode> {
+    pub fn get_op_codes(&mut self) -> &Vec<OpCode> {
         if !self.op_codes.is_empty() {
             return &self.op_codes;
         }
-        let i =0 as usize;
-        let j =0 as usize;
+
+        let mut i =0 as usize;
+        let mut j =0 as usize;
         
         let mut op_codes_v = Vec::new();
         for m in self.get_matching_blocks().iter() {
@@ -406,12 +425,24 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             
             if tag > 0 {
                 op_codes_v.push(OpCode {
-                    tag: tag,
+                    tag,
                     i1: i,
                     i2: m.a,
                     j1: j,
                     j2: m.b
                 }); 
+            }
+            i = m.a + m.size;
+            j = m.b + m.size;
+
+            if m.size > 0 {
+                op_codes_v.push(OpCode{
+                    tag: b'e',
+                    i1: m.a, 
+                    i2: i, 
+                    j1: m.b,
+                    j2: j
+                });
             }
         }
         
@@ -423,7 +454,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     //
     // Return a generator of groups with up to n lines of context.
     // Each group is in the same format as returned by GetOpCodes().
-    fn get_grouped_op_codes(&mut self, mut n: usize) -> Vec<Vec<OpCode>> {
+    pub fn get_grouped_op_codes(&mut self, mut n: usize) -> Vec<Vec<OpCode>> {
         if n < 0 {
             n = 3;
         }
