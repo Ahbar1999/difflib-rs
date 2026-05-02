@@ -16,6 +16,7 @@
 use std::collections::{HashMap};
 use std::cmp::{max, min};
 
+#[derive(Clone)]
 struct Match {
     a: usize, 
     b: usize, 
@@ -122,7 +123,6 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     }
      
     fn set_seq2(&mut self, b: Vec<&'life_of_b str>) {
-        // println!("seq_seq2() b: {:?}", &b);
         if self.b.is_some() && b == *self.b.as_ref().unwrap() {
             return;
         }
@@ -137,16 +137,18 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     pub fn new_with_junk(
         _a: Vec<&'life_of_a str>, 
         _b: Vec<&'life_of_b str>,
+        auto_junk: bool,
         is_junk: Box<dyn Fn(&'_ str) -> bool>) -> Self {
         
         let mut matcher = SequenceMatcher::new(_a, _b);
-        
+        matcher.auto_junk = auto_junk; 
         matcher.is_junk.replace(is_junk);
-
+        // set_seqs is called in the new() method
         matcher
     }
 
     fn chain_b(&mut self) {
+        // populate line -> index mapping
         for (i, s) in self.b.as_ref().unwrap().iter().enumerate() {
             self.b2j
                 .entry(s)
@@ -156,16 +158,18 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
 
         // remove junk elements if is_junk detector was provided
         if self.is_junk.is_some() {
-            // store junks separately  
+            // store junks separately
+            let mut junk = self.b_junk.clone();
+
             for (s, _) in self.b2j.iter() {
                 // call is_junk(s)
                 if self.is_junk.as_ref().unwrap()(s) {
-                    self.b_junk.insert(s, Match::new());
+                    junk.insert(s, Match::new());
                 }
             } 
             
             // remove junks from b2j
-            for (s, _) in self.b_junk.iter() {
+            for (s, _) in junk.into_iter() {
                 self.b2j.remove(s);
             }
         }
@@ -193,14 +197,14 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     }
     
     fn find_longest_match(&self, alo: usize, ahi: usize, blo: usize, bhi: usize) -> Match {
-        let mut besti: isize = alo as isize;
-        let mut bestj: isize = blo as isize;
+        let mut besti = alo as usize;
+        let mut bestj  = blo as usize;
         let mut bestsize: usize =0;
         
         /*
-            find the longest junk-free match
-            during an iteration of the loop, j2len[j] = length of longest
-            junk-free match ending with a[i - 1] and b[j]
+        find the longest junk-free match
+        during an iteration of the loop, j2len[j] = length of longest
+        junk-free match ending with a[i - 1] and b[j]
         */
         let mut j2len = HashMap::<usize, usize>::new();
         
@@ -208,22 +212,25 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             // look at all instances of a[i] in b; note that because
             // b2j has no junk keys, the loop is skipped if a[i] is junk
             let mut newj2len = HashMap::new();
-            
+             
             self.a.as_ref().map(|val| {
                 self.b2j.get(val[i]).map(|indices| {
                     for &j in indices {
                         if j < blo {
                             continue;
                         }
+                        
                         if j >= bhi {
                            break; 
                         }
 
-                        let k = j2len.get(&j.wrapping_sub(1)).or_else( || Some(&0) ).unwrap() + 1;
+                        let k = j2len.get(&j.wrapping_sub(1)).or(Some(&0)).unwrap() + 1;
+
                         newj2len.insert(j, k);
+                        
                         if k > bestsize {
-                            besti = i - k +1;
-                            bestj = j - k+ 1;
+                            besti = 1 + i - k;
+                            bestj = 1 + j - k;
                             bestsize = k;
                         } 
                     }

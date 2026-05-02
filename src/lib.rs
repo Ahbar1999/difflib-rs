@@ -26,9 +26,7 @@ mod tests {
         let mut buf_a  = [0 as u8; A.len()]; 
         
         const B: &str = "abycdf";
-        let mut buf_b  = [0 as u8; B.len()];   // this buffers should be heap allocated
-        
-        println!("this: {:?}", chars_to_strs(A, &mut buf_a));
+        let mut buf_b  = [0 as u8; B.len()];   // these buffers should be heap allocated
                                                         // but for this example size we are okay 
         let mut s = SequenceMatcher::new(
             chars_to_strs(A, &mut buf_a),
