@@ -93,6 +93,36 @@ mod tests {
         let expected = "group\n e, 5, 8, 5, 8\n i, 8, 8, 8, 9\n e, 8, 11, 9, 12\ngroup\n e, 16, 19, 17, 20\n r, 19, 20, 20, 21\n e, 20, 22, 21, 23\n d, 22, 27, 23, 23\n e, 27, 30, 23, 26\ngroup\n e, 31, 34, 27, 30\n r, 34, 35, 30, 31\n e, 35, 38, 31, 34\n";
         assert_eq!(result.as_str(), expected);
     }
+    
+    #[test]
+    fn example_get_unified_diff_code() {
+        let a = "one\ntwo\nthree\nfour\nfmt.Printf(\"%s,%T\",a,b)";
+        let b = "zero\none\nthree\nfour";
+
+        let mut diff  = UnifiedDiff {
+            a:        Some(&a.lines().collect()),
+            b:        Some(&b.lines().collect()),
+            from_file: "Original".to_owned(),
+            from_date: "2005-01-26 23:30:50".to_owned(),
+            to_file:   "Current".to_owned(),
+            to_date:   "2010-04-02 10:20:52".to_owned(),
+            eol:       "\n".to_owned(),
+            context:  3,
+	    };
+
+        let result = get_unified_diff_string(&mut diff).ok().unwrap();
+        println!("{}", result.replacen("\t", " ", result.len()));
+	// Output:
+	// --- Original 2005-01-26 23:30:50
+	// +++ Current 2010-04-02 10:20:52
+	// @@ -1,5 +1,4 @@
+	// +zero
+	//  one
+	// -two
+	//  three
+	//  four
+	// -fmt.Printf("%s,%T",a,b)
+    }
 
 /*
 func ExampleGetUnifiedDiffCode() {
@@ -419,5 +449,4 @@ func BenchmarkSplitLines10000(b *testing.B) {
 }
 * 
 */
-
 }

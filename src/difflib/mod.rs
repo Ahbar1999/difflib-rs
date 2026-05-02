@@ -15,6 +15,7 @@
 
 use std::collections::{HashMap};
 use std::cmp::{max, min};
+use std::io::{Write};
 
 #[derive(Clone)]
 struct Match {
@@ -33,7 +34,7 @@ impl Match {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OpCode {
     pub tag: u8,
     pub i1: usize,
@@ -649,7 +650,7 @@ impl<'life_of_a, 'life_of_b, 'life_of_self> UnifiedDiff<'life_of_a, 'life_of_b, 
             b: None,
             to_file: String::new(),
             to_date: String::new(),
-            eol: String::new(),
+            eol: "\n".to_owned(),
             context: 0
         }
     }
@@ -672,8 +673,7 @@ fn format_range_unified(start: usize, stop: usize) -> String {
 	format!("{},{}", beginning, length)
 }
 
-pub fn write_unified_diff(mut writer: impl std::io::Write, diff: &mut UnifiedDiff) -> std::io::Result<()> {
-    
+pub fn write_unified_diff(writer: &mut impl std::io::Write, diff: &mut UnifiedDiff) -> std::io::Result<()> {
     if diff.eol.len() == 0 {
         diff.eol = "\n".to_string();
     }
@@ -681,9 +681,11 @@ pub fn write_unified_diff(mut writer: impl std::io::Write, diff: &mut UnifiedDif
     let mut started = false;
     let mut m = SequenceMatcher::new(
         diff.a.as_ref().unwrap().to_vec(), 
-        diff.a.as_ref().unwrap().to_vec()); 
+        diff.b.as_ref().unwrap().to_vec()); 
     
-    for g in m.get_grouped_op_codes(diff.context) { 
+    let groups = m.get_grouped_op_codes(diff.context);
+    // println!("{:?}", groups);
+    for g in groups{
         if !started {
             started = true;
             let mut from_date = String::new();
@@ -698,7 +700,6 @@ pub fn write_unified_diff(mut writer: impl std::io::Write, diff: &mut UnifiedDif
 
             if diff.from_file != "" || diff.to_file != "" {
                 writer.write(format!("--- {}{}{}", diff.from_file, from_date, diff.eol).as_bytes())?;
-
                 writer.write(format!("+++ {}{}{}", diff.to_file, to_date, diff.eol).as_bytes())?;
             }
         }
@@ -716,58 +717,28 @@ pub fn write_unified_diff(mut writer: impl std::io::Write, diff: &mut UnifiedDif
             let i2= c.i2;
             let j1 = c.j1;
             let j2 = c.j2;
-            /*
-             * match causing more duplicated code in this case therefore sticking with if
-             * statements
-            match c.tag {
-                b'e' => { 
-                    for line in &diff.a.as_ref().unwrap()[i1..i2] {
-                        writer.write(format!(" {:}", line).as_bytes())?;
-                    }
-                },
-                b'r' => { 
-                    for line in &diff.a.as_ref().unwrap()[i1..i2] {
-                        writer.write(format!("-{:}", line).as_bytes())?;
-                    }
-                    
-                    for line in &diff.b.as_ref().unwrap()[j1..j2] {
-                        writer.write(format!("+{:}", line).as_bytes())?;
-                    }
-                },
-                b'd' => { 
-                    for line in &diff.a.as_ref().unwrap()[i1..i2] {
-                        writer.write(format!("-{:}", line).as_bytes())?;
-                    }
-                },
-                b'i' => { 
-                    for line in &diff.b.as_ref().unwrap()[j1..j2] {
-                        writer.write(format!("-{:}", line).as_bytes())?;
-                    }
-                },
-            }
-            */
 
             if c.tag == b'e' {
-                for line in &diff.b.as_ref().unwrap()[j1..j2] {
-                    writer.write(format!(" {}", line).as_bytes())?;
+                for line in &diff.a.as_ref().unwrap()[i1..i2] {
+                    writer.write(format!(" {}\n", line).as_bytes())?;
                 }
                 continue;
             }
 
             if c.tag == b'r' || c.tag == b'd' {
                 for line in &diff.a.as_ref().unwrap()[i1..i2] {
-                    writer.write(format!("-{}", line).as_bytes())?;
+                    writer.write(format!("-{}\n", line).as_bytes())?;
                 }
             }
 
             if c.tag == b'r' || c.tag == b'i' {
                 for line in &diff.b.as_ref().unwrap()[j1..j2] {
-                    writer.write(format!("+{}", line).as_bytes())?;
+                    writer.write(format!("+{}\n", line).as_bytes())?;
                 }
             }
         } 
     }
-
+    
     Ok(())
 } 
 
@@ -775,7 +746,9 @@ pub fn get_unified_diff_string(diff: &mut UnifiedDiff) -> Result<String, std::io
     let mut buf = std::io::BufWriter::new(Vec::<u8>::new());
 
     write_unified_diff(&mut buf, diff)?;
-        
+
+    buf.flush()?;
+    
     Ok(String::from_utf8( buf.into_inner().ok().unwrap()).expect("Found invalid utf-8 string"))
 }
 
