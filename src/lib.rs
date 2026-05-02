@@ -29,8 +29,8 @@ mod tests {
         let mut buf_b  = [0 as u8; B.len()];   // these buffers should be heap allocated
                                                         // but for this example size we are okay 
         let mut s = SequenceMatcher::new(
-            chars_to_strs(A, &mut buf_a),
-            chars_to_strs(B, &mut buf_b)
+             chars_to_strs(A, &mut buf_a),
+             chars_to_strs(B, &mut buf_b)
         ); 
         let mut result_buf = Vec::new(); 
         for op in s.get_op_codes() {
@@ -42,76 +42,59 @@ mod tests {
 
         let expected  = "d a[0:1], (q) b[0:0] ()\ne a[1:3], (ab) b[0:2] (ab)\nr a[3:4], (x) b[2:3] (y)\ne a[4:6], (cd) b[3:5] (cd)\ni a[6:6], () b[5:6] (f)\n";
 
-        assert_eq!(result, expected)
-    }   
-    /*
-    func assertEqual(t *testing.T, a, b interface{}) {
-	if !reflect.DeepEqual(a, b) {
-		t.Errorf("%v != %v", a, b)
-	}
-}
+        assert_eq!(result, expected);
+    }
+    
+    #[test]
+    fn test_sequence_matcher_ratio() {
+        const A: &str = "abcd";
+        const B: &str = "bcde";
+        let mut buf_a = [0 as u8; A.len()];
+        let mut buf_b = [0 as u8; B.len()];
 
-func splitChars(s string) []string {
-	chars := make([]string, 0, len(s))
-	// Assume ASCII inputs
-	for i := 0; i != len(s); i++ {
-		chars = append(chars, string(s[i]))
-	}
-	return chars
-}
+        let mut sm = SequenceMatcher::new(
+            chars_to_strs(A, &mut buf_a),
+            chars_to_strs(B, &mut buf_b));
+        
+        assert_eq!(sm.ratio(), 0.75);
+        assert_eq!(sm.quick_ratio(), 0.75);
+        assert_eq!(sm.real_quick_ratio(), 1.0);
+    }
 
-func TestSequenceMatcherRatio(t *testing.T) {
-	s := NewMatcher(splitChars("abcd"), splitChars("bcde"))
-	assertEqual(t, s.Ratio(), 0.75)
-	assertEqual(t, s.QuickRatio(), 0.75)
-	assertEqual(t, s.RealQuickRatio(), 1.0)
-}
+    #[test]
+    fn test_grouped_codes() {
+        let mut x = Vec::new();
+         
+        (0..39).into_iter().for_each(|i| x.push(format!("{}", i)) );
 
+        let a= x.iter().map(|s| s.as_str()).collect();
 
-func TestGroupedOpCodes(t *testing.T) {
-	a := []string{}
-	for i := 0; i != 39; i++ {
-		a = append(a, fmt.Sprintf("%02d", i))
-	}
-	b := []string{}
-	b = append(b, a[:8]...)
-	b = append(b, " i")
-	b = append(b, a[8:19]...)
-	b = append(b, " x")
-	b = append(b, a[20:22]...)
-	b = append(b, a[27:34]...)
-	b = append(b, " y")
-	b = append(b, a[35:]...)
-	s := NewMatcher(a, b)
-	w := &bytes.Buffer{}
-	for _, g := range s.GetGroupedOpCodes(-1) {
-		fmt.Fprintf(w, "group\n")
-		for _, op := range g {
-			fmt.Fprintf(w, "  %s, %d, %d, %d, %d\n", string(op.Tag),
-				op.I1, op.I2, op.J1, op.J2)
-		}
-	}
-	result := string(w.Bytes())
-	expected := `group
-  e, 5, 8, 5, 8
-  i, 8, 8, 8, 9
-  e, 8, 11, 9, 12
-group
-  e, 16, 19, 17, 20
-  r, 19, 20, 20, 21
-  e, 20, 22, 21, 23
-  d, 22, 27, 23, 23
-  e, 27, 30, 23, 26
-group
-  e, 31, 34, 27, 30
-  r, 34, 35, 30, 31
-  e, 35, 38, 31, 34
-`
-	if expected != result {
-		t.Errorf("unexpected op codes: \n%s", result)
-	}
-}
+        let mut b: Vec<&str> = Vec::new();
+        x[..8].iter().for_each(|s| { b.push(s); } );
+        b.push(" i");
+        x[8..19].iter().for_each(|s| { b.push(s); });
+        b.push(" x");
+        x[20..22].iter().for_each(|s| { b.push(s); });
+        x[27..34].iter().for_each(|s| { b.push(s); });
+        b.push(" y");
+        x[35..].iter().for_each(|s| { b.push(s); });
 
+        let mut sm = SequenceMatcher::new(a, b); 
+        
+        let mut result = String::new();
+        for g in sm.get_grouped_op_codes(usize::MAX) {
+            result.push_str(&format!("group\n"));
+            for op in g {
+                result.push_str(&format!(" {}, {}, {}, {}, {}\n", 
+                    op.tag as char, op.i1, op.i2, op.j1, op.j2));
+            }
+        }
+
+        let expected = "group\n e, 5, 8, 5, 8\n i, 8, 8, 8, 9\n e, 8, 11, 9, 12\ngroup\n e, 16, 19, 17, 20\n r, 19, 20, 20, 21\n e, 20, 22, 21, 23\n d, 22, 27, 23, 23\n e, 27, 30, 23, 26\ngroup\n e, 31, 34, 27, 30\n r, 34, 35, 30, 31\n e, 35, 38, 31, 34\n";
+        assert_eq!(result.as_str(), expected);
+    }
+
+/*
 func ExampleGetUnifiedDiffCode() {
 	a := `one
 two
@@ -435,6 +418,6 @@ func BenchmarkSplitLines10000(b *testing.B) {
 	benchmarkSplitLines(b, 10000)
 }
 * 
-* */
+*/
 
 }

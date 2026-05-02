@@ -33,6 +33,7 @@ impl Match {
     }
 }
 
+#[derive(Clone)]
 pub struct OpCode {
     pub tag: u8,
     pub i1: usize,
@@ -462,11 +463,11 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     // Return a generator of groups with up to n lines of context.
     // Each group is in the same format as returned by GetOpCodes().
     pub fn get_grouped_op_codes(&mut self, mut n: usize) -> Vec<Vec<OpCode>> {
-        if n < 0 {
+        if n == usize::MAX {
             n = 3;
         }
         
-        let codes = &mut self.op_codes;
+        let mut codes= self.get_op_codes().clone();
         if codes.len() == 0 {
             codes.push(OpCode::new(b'e',0,1,0,1));
         } 
@@ -481,9 +482,9 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
 
             codes[0] = OpCode{
                 tag: c.tag,
-                i1: max(i1, i2 - n),
+                i1: max(i1, i2.saturating_sub(n)),
                 i2: i2,
-                j1: max(j1, j2 -n),
+                j1: max(j1, j2.saturating_sub(n)),
                 j2: j2,
             }
         }
@@ -544,7 +545,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     // .get_matching_blocks() or .get_op_codes(), in which case you may
     // want to try .quick_ratio() or .real_quick_ratio() first to get an
     // upper bound.
-    fn ratio(&mut self) -> f64 {
+    pub fn ratio(&mut self) -> f64 {
         let mut matches =0;
 
         for m in self.get_matching_blocks() {
@@ -558,7 +559,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     //
     // This isn't defined beyond that it is an upper bound on .Ratio(), and
     // is faster to compute.
-    fn quick_ratio(&mut self) -> f64 {
+    pub fn quick_ratio(&mut self) -> f64 {
         // viewing a and b as multisets, set matches to the cardinality
         // of their intersection; this counts the number of matches
         // without regard to order, so is clearly an upper bound
@@ -568,7 +569,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
                 self.full_b_count
                     .entry(s)
                     .and_modify(|value| { *value += 1; })
-                    .or_insert(0); 
+                    .or_insert(1); 
             } 
         }
 
@@ -578,12 +579,14 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         let mut matches =0;
         
         for s in self.a.as_ref().unwrap() {
-            let n = *avail
-                .entry(s)
-                .or_insert(self.full_b_count[s]);
+            let n = *avail.
+                get(s).
+                or(self.full_b_count
+                    .get(s)
+                    .or(Some(&0))).unwrap();
             
             // update the entry
-            avail.insert(s,n -1);
+            avail.insert(s,n.wrapping_sub(1));
 
             if n > 0 {
                 matches += 1;
@@ -599,7 +602,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     //
     // This isn't defined beyond that it is an upper bound on .ratio(), and
     // is faster to compute than either .ratio() or .quick_ratio().
-    fn real_quick_ratio(&self) -> f64 {
+    pub fn real_quick_ratio(&self) -> f64 {
         let la = self.a.as_ref().unwrap().len();
         let lb = self.b.as_ref().unwrap().len();
     
