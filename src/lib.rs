@@ -5,7 +5,9 @@ pub mod utils;
 #[cfg(test)]
 mod tests {
     use crate::difflib::*;
-    
+    use std::collections::HashMap;
+    use crate::map;
+
     fn chars_to_strs<'life_of_buf>(s: &str, buf: &'life_of_buf mut [u8]) -> Vec<&'life_of_buf str> {
         let mut v = Vec::new();
         
@@ -27,10 +29,10 @@ mod tests {
         
         const B: &str = "abycdf";
         let mut buf_b  = [0 as u8; B.len()];   // these buffers should be heap allocated
-                                                        // but for this example size we are okay 
+        // but for this example size we are okay 
         let mut s = SequenceMatcher::new(
-             chars_to_strs(A, &mut buf_a),
-             chars_to_strs(B, &mut buf_b)
+         chars_to_strs(A, &mut buf_a),
+         chars_to_strs(B, &mut buf_b)
         ); 
         let mut result_buf = Vec::new(); 
         for op in s.get_op_codes() {
@@ -160,91 +162,112 @@ mod tests {
         // ! tree
         //   four
     }
-}
+    
+    #[test]
+    fn test_with_ascii_one_insert() {
+        let mut a = "b".repeat(100);
+        let mut b = "a".to_owned() + a.as_str();
+        let mut buf_a = vec![0 as u8; a.len()]; 
+        let mut buf_b = vec![0 as u8; b.len()];
+
+        let mut sm = SequenceMatcher::new(
+            chars_to_strs(a.as_str(), &mut buf_a),
+            chars_to_strs(b.as_str(), &mut buf_b));
+        
+        assert!((sm.ratio() - 0.995) < 1e-3);
+        assert_eq!(sm.get_op_codes(), 
+            &vec![OpCode{tag: b'i', i1: 0, i2: 0, j1: 0, j2: 1}, 
+                OpCode{tag: b'e', i1: 0, i2: 100, j1: 1, j2: 101}]);
+        assert_eq!(sm.b_popular.len(), 0);
+        
+        a = "b".repeat(100);
+        buf_a = vec![0 as u8; a.len()];
+        b = "b".repeat(50) + "a" + &"b".repeat(50);
+        buf_b = vec![0 as u8; b.len()];
+        
+        sm = SequenceMatcher::new(
+           chars_to_strs(a.as_str(), &mut buf_a),
+           chars_to_strs(b.as_str(), &mut buf_b));
+        assert!((sm.ratio() - 0.995) < 1e-3);
+        assert_eq!(sm.get_op_codes(), 
+            &vec![
+                OpCode{tag: b'e', i1: 0, i2: 50, j1: 0, j2: 50},
+                OpCode{tag: b'i', i1: 50, i2: 50, j1: 50, j2: 51},
+                OpCode{tag: b'e', i1: 50, i2: 100, j1: 51, j2: 101}]);
+        assert_eq!(sm.b_popular.len(), 0);
+    }
+
+    #[test]
+    fn test_with_ascii_on_delete() {
+        let a =  "a".repeat(40) + "c" + "b".repeat(40).as_str();
+        let mut buf_a = vec![0 as u8; a.len()];
+        let b = "a".repeat(40) + "b".repeat(40).as_str();
+        let mut buf_b = vec![0 as u8; b.len()];
+       
+        let mut sm = SequenceMatcher::new(
+            chars_to_strs(a.as_str(), &mut buf_a),
+            chars_to_strs(b.as_str(), &mut buf_b),
+        );
+        
+        assert!((sm.ratio() - 0.994).abs() < 1e-3);
+        assert_eq!(sm.get_op_codes(),
+            &vec![
+                OpCode{tag: b'e', i1: 0, i2: 40, j1: 0, j2: 40}, 
+                OpCode{tag: b'd', i1 :40, i2: 41, j1: 40, j2: 40}, 
+                OpCode{tag: b'e', i1: 41, i2: 81, j1 :40, j2 :80}]);
+    }
+
+    fn test_with_ascii_b_junk() {
+        let is_junk = |s: &str| {
+            return s == " ";
+        };
+        
+        let mut a = "a".repeat(40) + "b".repeat(40).as_str();
+        let mut buf_a = vec![0 as u8; a.len()];
+
+        let mut b = "a".repeat(44) + "b".repeat(40).as_str();
+        let mut buf_b = vec![0 as u8; b.len()];
+        
+        let mut sm = SequenceMatcher::new_with_junk(
+            chars_to_strs(&a, &mut buf_a),
+            chars_to_strs(&b, &mut buf_b),
+            true,
+            Box::new(is_junk.clone()));
+        
+        assert_eq!(&sm.b_junk, &HashMap::new());
+        
+        a = "a".repeat(40) + "b".repeat(40).as_str();
+        buf_a = vec![0 as u8; a.len()];
+
+        b = "a".repeat(44) + "b".repeat(40).as_str() + " ".repeat(20).as_str();
+        buf_b = vec![0 as u8; b.len()];
+        
+        sm = SequenceMatcher::new_with_junk(
+            chars_to_strs(&a, &mut buf_a),
+            chars_to_strs(&b, &mut buf_b),
+            false, 
+            Box::new(is_junk.clone()));
+        
+        assert_eq!(&sm.b_junk, &map!{
+                " " => Match::new()
+        });
+
+        let is_junk2 = Box::new(|s: &str| {
+            return s == " " || s == "b";
+        });
+
+        sm = SequenceMatcher::new_with_junk(
+            chars_to_strs(&a, &mut buf_a),
+            chars_to_strs(&b, &mut buf_b),
+            false, 
+            is_junk2);
+        
+        assert_eq!(&sm.b_junk, &map!{
+                " " => Match::new(),
+                "b" => Match::new(),
+        });
+    }
 /*
-func ExampleGetContextDiffString() {
-	a := `one
-two
-three
-four`
-	b := `zero
-one
-tree
-four`
-	diff := ContextDiff{
-		A:        SplitLines(a),
-		B:        SplitLines(b),
-		FromFile: "Original",
-		ToFile:   "Current",
-		Context:  3,
-		Eol:      "\n",
-	}
-	result, _ := GetContextDiffString(diff)
-	fmt.Printf(strings.Replace(result, "\t", " ", -1))
-	// Output:
-	// *** Original
-	// --- Current
-	// ***************
-	// *** 1,4 ****
-	//   one
-	// ! two
-	// ! three
-	//   four
-	// --- 1,4 ----
-	// + zero
-	//   one
-	// ! tree
-	//   four
-}
-
-func rep(s string, count int) string {
-	return strings.Repeat(s, count)
-}
-
-func TestWithAsciiOneInsert(t *testing.T) {
-	sm := NewMatcher(splitChars(rep("b", 100)),
-		splitChars("a"+rep("b", 100)))
-	assertAlmostEqual(t, sm.Ratio(), 0.995, 3)
-	assertEqual(t, sm.GetOpCodes(),
-		[]OpCode{{'i', 0, 0, 0, 1}, {'e', 0, 100, 1, 101}})
-	assertEqual(t, len(sm.bPopular), 0)
-
-	sm = NewMatcher(splitChars(rep("b", 100)),
-		splitChars(rep("b", 50)+"a"+rep("b", 50)))
-	assertAlmostEqual(t, sm.Ratio(), 0.995, 3)
-	assertEqual(t, sm.GetOpCodes(),
-		[]OpCode{{'e', 0, 50, 0, 50}, {'i', 50, 50, 50, 51}, {'e', 50, 100, 51, 101}})
-	assertEqual(t, len(sm.bPopular), 0)
-}
-
-func TestWithAsciiOnDelete(t *testing.T) {
-	sm := NewMatcher(splitChars(rep("a", 40)+"c"+rep("b", 40)),
-		splitChars(rep("a", 40)+rep("b", 40)))
-	assertAlmostEqual(t, sm.Ratio(), 0.994, 3)
-	assertEqual(t, sm.GetOpCodes(),
-		[]OpCode{{'e', 0, 40, 0, 40}, {'d', 40, 41, 40, 40}, {'e', 41, 81, 40, 80}})
-}
-
-func TestWithAsciiBJunk(t *testing.T) {
-	isJunk := func(s string) bool {
-		return s == " "
-	}
-	sm := NewMatcherWithJunk(splitChars(rep("a", 40)+rep("b", 40)),
-		splitChars(rep("a", 44)+rep("b", 40)), true, isJunk)
-	assertEqual(t, sm.bJunk, map[string]struct{}{})
-
-	sm = NewMatcherWithJunk(splitChars(rep("a", 40)+rep("b", 40)),
-		splitChars(rep("a", 44)+rep("b", 40)+rep(" ", 20)), false, isJunk)
-	assertEqual(t, sm.bJunk, map[string]struct{}{" ": struct{}{}})
-
-	isJunk = func(s string) bool {
-		return s == " " || s == "b"
-	}
-	sm = NewMatcherWithJunk(splitChars(rep("a", 40)+rep("b", 40)),
-		splitChars(rep("a", 44)+rep("b", 40)+rep(" ", 20)), false, isJunk)
-	assertEqual(t, sm.bJunk, map[string]struct{}{" ": struct{}{}, "b": struct{}{}})
-}
-
 func TestSFBugsRatioForNullSeqn(t *testing.T) {
 	sm := NewMatcher(nil, nil)
 	assertEqual(t, sm.Ratio(), 1.0)
@@ -416,3 +439,4 @@ func BenchmarkSplitLines10000(b *testing.B) {
 }
 * 
 */
+}

@@ -11,10 +11,10 @@ macro_rules! map {
     };
 }
 
-/*
+
 #[macro_export]
-macro_rules! chars_to_strs {
-    ($s:expr) => {
+macro_rules! make_strs {
+    ($s:ident) => {
         {
             let mut buf = vec![0 as u8; $s.len()];
         
@@ -28,8 +28,7 @@ macro_rules! chars_to_strs {
                 v.push(str::from_utf8(&buf[i..i + 1]).ok().unwrap());
             }
                 
-            v
+            (buf, v)
         }
     }
 }
-*/

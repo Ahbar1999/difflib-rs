@@ -17,15 +17,15 @@ use std::collections::{HashMap};
 use std::cmp::{max, min};
 use std::io::{Write};
 
-#[derive(Clone)]
-struct Match {
+#[derive(Clone, PartialEq, Debug)]
+pub struct Match {
     a: usize, 
     b: usize, 
     size: usize,
 }
 
 impl Match {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             a: 0, 
             b: 0,
@@ -34,7 +34,7 @@ impl Match {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OpCode {
     pub tag: u8,
     pub i1: usize,
@@ -79,11 +79,11 @@ pub struct SequenceMatcher<'life_of_a, 'life_of_b> {
     b2j: HashMap<&'life_of_b str, Vec<usize>>,          // line -> index mapping for b sequence
     is_junk: Option<Box<dyn Fn(&'_ str) -> bool>>,      // a function for checking junk lines 
     auto_junk: bool,                                        
-    b_junk: HashMap<&'life_of_b str, Match>,            // depository of junks in b
-    matching_blocks: Vec<Match>,
-    full_b_count: HashMap<&'life_of_b str, usize>,
-    b_popular: HashMap<&'life_of_b str, Match>,
-    op_codes: Vec<OpCode>,
+    pub b_junk: HashMap<&'life_of_b str, Match>,            // depository of junks in b
+    pub matching_blocks: Vec<Match>,
+    pub full_b_count: HashMap<&'life_of_b str, usize>,
+    pub b_popular: HashMap<&'life_of_b str, Match>,
+    pub op_codes: Vec<OpCode>,
 }
 
 impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of_b> {
