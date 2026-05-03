@@ -766,7 +766,7 @@ fn format_range_context(start: usize, stop: usize) -> String {
 	format!("{},{}", beginning, beginning+length-1) 
 }
 
-type ContextDiff<'life_of_a, 'life_of_b, 'life_of_self> = UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_self>;
+pub type ContextDiff<'life_of_a, 'life_of_b, 'life_of_self> = UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_self>;
 
 // Compare two sequences of lines; generate the delta as a context diff.
 //
@@ -827,7 +827,7 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 		let first= &g[0];
         let last = g.last().unwrap();
 
-		writer.write(format!("***************").as_bytes())?;
+		writer.write(format!("***************{}", &diff.eol).as_bytes())?;
 		
         let range1 = format_range_context(first.i1, last.i2);
 
@@ -840,7 +840,7 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 						continue;
 					}
 					for line in &diff.a.as_ref().unwrap()[cc.i1..cc.i2] {
-		                writer.write(format!("{}", prefix[&cc.tag].to_owned() + &line).as_bytes())?;
+		                writer.write(format!("{}\n", prefix[&cc.tag].to_owned() + &line).as_bytes())?;
 					}
 				}
 				break;
@@ -848,7 +848,6 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 		}
 
 		let range2 = format_range_context(first.j1, last.j2);
-		// wf("--- %s ----%s", range2, diff.Eol)
         writer.write(format!("--- {} ----{}", range2, diff.eol).as_bytes())?;
 
 		for c in g.iter() {
@@ -858,7 +857,7 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 						continue;
 					}
 					for line in &diff.b.as_ref().unwrap()[cc.j1..cc.j2] {
-					    writer.write(format!("{}", prefix[&cc.tag].to_owned() + &line).as_bytes())?;	
+					    writer.write(format!("{}{}\n", &prefix[&cc.tag], &line).as_bytes())?;	
 					}
 				}
 				break;
@@ -870,10 +869,10 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 }
 
 // Like write_context_diff but returns the diff a string.
-fn get_context_diff_string(diff: &mut ContextDiff) -> Result<String, std::io::Error> {
+pub fn get_context_diff_string(diff: &mut ContextDiff) -> Result<String, std::io::Error> {
     let mut buf = std::io::BufWriter::new(Vec::<u8>::new());
 
-    write_unified_diff(&mut buf, diff)?;
+    write_context_diff(&mut buf, diff)?;
         
     Ok(String::from_utf8( buf.into_inner().ok().unwrap()).expect("Found invalid utf-8 string"))
 }

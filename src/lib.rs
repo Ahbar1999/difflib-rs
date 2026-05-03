@@ -111,7 +111,7 @@ mod tests {
 	    };
 
         let result = get_unified_diff_string(&mut diff).ok().unwrap();
-        println!("{}", result.replacen("\t", " ", result.len()));
+        println!("example_get_unified_diff_code():\n{}", result.replacen("\t", " ", result.len()));
 	// Output:
 	// --- Original 2005-01-26 23:30:50
 	// +++ Current 2010-04-02 10:20:52
@@ -123,78 +123,45 @@ mod tests {
 	//  four
 	// -fmt.Printf("%s,%T",a,b)
     }
+    
+    #[test]
+    fn example_get_context_diff_code() {
+        let a = "one\ntwo\nthree\nfour";
+        let b = "zero\none\ntree\nfour";
 
+        let mut diff = ContextDiff {
+            a:        Some(&a.lines().collect()),
+            b:        Some(&b.lines().collect()),
+            from_file: "Original".to_owned(),
+            from_date: "".to_owned(),
+            to_file:   "Current".to_owned(),
+            to_date:    "".to_owned(),
+            eol:      "\n".to_owned(),
+            context:  3,
+        };
+
+        let result = get_context_diff_string(&mut diff).ok().unwrap(); 
+        
+        println!("example_get_context_diff_code():\n{}", result.replacen("\t", " ", result.len()));
+        // fmt.Print(strings.Replace(result, "\t", " ", -1))
+        // Output:
+        // *** Original
+        // --- Current
+        // ***************
+        // *** 1,5 ****
+        //   one
+        // ! two
+        // ! three
+        //   four
+        // - fmt.Printf("%s,%T",a,b)
+        // --- 1,4 ----
+        // + zero
+        //   one
+        // ! tree
+        //   four
+    }
+}
 /*
-func ExampleGetUnifiedDiffCode() {
-	a := `one
-two
-three
-four
-fmt.Printf("%s,%T",a,b)`
-	b := `zero
-one
-three
-four`
-	diff := UnifiedDiff{
-		A:        SplitLines(a),
-		B:        SplitLines(b),
-		FromFile: "Original",
-		FromDate: "2005-01-26 23:30:50",
-		ToFile:   "Current",
-		ToDate:   "2010-04-02 10:20:52",
-		Context:  3,
-	}
-	result, _ := GetUnifiedDiffString(diff)
-	fmt.Println(strings.Replace(result, "\t", " ", -1))
-	// Output:
-	// --- Original 2005-01-26 23:30:50
-	// +++ Current 2010-04-02 10:20:52
-	// @@ -1,5 +1,4 @@
-	// +zero
-	//  one
-	// -two
-	//  three
-	//  four
-	// -fmt.Printf("%s,%T",a,b)
-}
-
-func ExampleGetContextDiffCode() {
-	a := `one
-two
-three
-four
-fmt.Printf("%s,%T",a,b)`
-	b := `zero
-one
-tree
-four`
-	diff := ContextDiff{
-		A:        SplitLines(a),
-		B:        SplitLines(b),
-		FromFile: "Original",
-		ToFile:   "Current",
-		Context:  3,
-		Eol:      "\n",
-	}
-	result, _ := GetContextDiffString(diff)
-	fmt.Print(strings.Replace(result, "\t", " ", -1))
-	// Output:
-	// *** Original
-	// --- Current
-	// ***************
-	// *** 1,5 ****
-	//   one
-	// ! two
-	// ! three
-	//   four
-	// - fmt.Printf("%s,%T",a,b)
-	// --- 1,4 ----
-	// + zero
-	//   one
-	// ! tree
-	//   four
-}
-
 func ExampleGetContextDiffString() {
 	a := `one
 two
@@ -449,4 +416,3 @@ func BenchmarkSplitLines10000(b *testing.B) {
 }
 * 
 */
-}
