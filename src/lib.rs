@@ -216,7 +216,8 @@ mod tests {
                 OpCode{tag: b'd', i1 :40, i2: 41, j1: 40, j2: 40}, 
                 OpCode{tag: b'e', i1: 41, i2: 81, j1 :40, j2 :80}]);
     }
-
+    
+    #[test]
     fn test_with_ascii_b_junk() {
         let is_junk = |s: &str| {
             return s == " ";
@@ -267,27 +268,37 @@ mod tests {
                 "b" => Match::new(),
         });
     }
+
+    #[test]
+    fn test_sf_bugs_ratio_for_null_seq() {
+        let mut sm = SequenceMatcher::new(vec![], vec![]);
+        assert_eq!(sm.ratio(), 1.0);
+        assert_eq!(sm.quick_ratio(), 1.0);
+        assert_eq!(sm.real_quick_ratio(), 1.0);
+    }
+    
+    #[test]
+    fn test_sf_bugs_comparing_empty_lists() {
+        let groups = SequenceMatcher::new(
+            vec![],vec![]).get_grouped_op_codes(usize::MAX);
+
+        assert_eq!(groups.len(), 0);
+        let mut diff = UnifiedDiff {
+            a:          Some(&vec![]),
+            b:          Some(&vec![]),
+            from_file:  "Original".to_owned(),
+            to_file:    "Current".to_owned(),
+            from_date:  "".to_owned(),
+            to_date:    "".to_owned(),
+            eol:        "\n".to_owned(), 
+            context:    3,
+        };
+
+        let result = get_unified_diff_string(&mut diff).ok().unwrap();
+        
+        assert_eq!(result, "")
+    }
 /*
-func TestSFBugsRatioForNullSeqn(t *testing.T) {
-	sm := NewMatcher(nil, nil)
-	assertEqual(t, sm.Ratio(), 1.0)
-	assertEqual(t, sm.QuickRatio(), 1.0)
-	assertEqual(t, sm.RealQuickRatio(), 1.0)
-}
-
-func TestSFBugsComparingEmptyLists(t *testing.T) {
-	groups := NewMatcher(nil, nil).GetGroupedOpCodes(-1)
-	assertEqual(t, len(groups), 0)
-	diff := UnifiedDiff{
-		FromFile: "Original",
-		ToFile:   "Current",
-		Context:  3,
-	}
-	result, err := GetUnifiedDiffString(diff)
-	assertEqual(t, err, nil)
-	assertEqual(t, result, "")
-}
-
 func TestOutputFormatRangeFormatUnified(t *testing.T) {
 	// Per the diff spec at http://www.unix.org/single_unix_specification/
 	//

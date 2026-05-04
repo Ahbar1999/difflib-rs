@@ -142,11 +142,22 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         auto_junk: bool,
         is_junk: Box<dyn Fn(&'_ str) -> bool>) -> Self {
         
-        let mut matcher = SequenceMatcher::new(_a, _b);
-        matcher.auto_junk = auto_junk; 
-        matcher.is_junk.replace(is_junk);
-        // set_seqs is called in the new() method
-        matcher
+        let mut m = Self {
+            a: None,
+            b: None,
+            b2j: HashMap::new(),
+            is_junk: Some(is_junk),
+            auto_junk: auto_junk,
+            b_junk: HashMap::new(),
+            matching_blocks: Vec::new(),
+            full_b_count: HashMap::new(),
+            b_popular: HashMap::new(),
+            op_codes: Vec::new()
+        };
+
+        m.set_seqs(_a, _b);
+
+        m
     }
 
     fn chain_b(&mut self) {
@@ -160,8 +171,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
 
         // remove junk elements if is_junk detector was provided
         if self.is_junk.is_some() {
-            // store junks separately
-            let mut junk = self.b_junk.clone();
+            let junk = &mut self.b_junk;
 
             for (s, _) in self.b2j.iter() {
                 // call is_junk(s)
