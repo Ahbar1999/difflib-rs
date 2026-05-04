@@ -298,72 +298,84 @@ mod tests {
         
         assert_eq!(result, "")
     }
+    
+    #[test]
+    fn test_output_format_range_format_unified() {
+        // Per the diff spec at http://www.unix.org/single_unix_specification/
+        //
+        // Each <range> field shall be of the form:
+        //   %1d", <beginning line number>  if the range contains exactly one line,
+        // and:
+        //  "%1d,%1d", <beginning line number>, <number of lines> otherwise.
+        // If a range is empty, its beginning line number shall be the number of
+        // the line just before the range, or 0 if the empty range starts the file.
+        
+        let fm = format_range_unified;
+        assert_eq!(fm(3, 3), "3,0");
+        assert_eq!(fm(3, 4), "4");
+        assert_eq!(fm(3, 5), "4,2");
+        assert_eq!(fm(3, 6), "4,3");
+        assert_eq!(fm(0, 0), "0,0");
+    }
+
+    #[test]
+    fn test_output_format_range_format_context() {
+        // Per the diff spec at http://www.unix.org/single_unix_specification/
+        //
+        // The range of lines in file1 shall be written in the following format
+        // if the range contains two or more lines:
+        //     "*** %d,%d ****\n", <beginning line number>, <ending line number>
+        // and the following format otherwise:
+        //     "*** %d ****\n", <ending line number>
+        // The ending line number of an empty range shall be the number of the preceding line,
+        // or 0 if the range is at the start of the file.
+        //
+        // Next, the range of lines in file2 shall be written in the following format
+        // if the range contains two or more lines:
+        //     "--- %d,%d ----\n", <beginning line number>, <ending line number>
+        // and the following format otherwise:
+        //     "--- %d ----\n", <ending line number>
+        // let fm := formatRangeContext
+        let fm = format_range_context; 
+
+        assert_eq!(fm(3, 3), "3");
+        assert_eq!(fm(3, 4), "4");
+        assert_eq!(fm(3, 5), "4,5");
+        assert_eq!(fm(3, 6), "4,6");
+        assert_eq!(fm(0, 0), "0");
+    }
+    
+    #[test]
+    fn test_output_format_tab_delimiter() {
+        let a = "one";
+        let mut buf_a = vec![0 as u8; a.len()];
+        let b = "two";
+        let mut buf_b = vec![0 as u8; b.len()];
+
+        let mut diff = UnifiedDiff{
+            a:          Some(&chars_to_strs(&a, &mut buf_a)),
+            b:          Some(&chars_to_strs(&b, &mut buf_b)),
+            from_file:  "Original".to_owned(),
+            from_date:  "2005-01-26 23:30:50".to_owned(),
+            to_file:    "Current".to_owned(),
+            to_date:    "2010-04-12 10:20:52".to_owned(),
+            eol:        "\n".to_owned(),
+            context: usize::MAX,
+        };
+
+        let ud = get_unified_diff_string(&mut diff).ok().unwrap();
+        assert_eq!(ud.split_inclusive("\n").collect::<Vec<_>>()[..2], vec![
+            "--- Original\t2005-01-26 23:30:50\n",
+            "+++ Current\t2010-04-12 10:20:52\n",
+        ]);
+
+        let cd= get_context_diff_string(&mut diff).ok().unwrap();
+        assert_eq!(cd.split_inclusive("\n").collect::<Vec<_>>()[..2], vec![
+            "*** Original\t2005-01-26 23:30:50\n",
+            "--- Current\t2010-04-12 10:20:52\n",
+        ]);
+    }
 /*
-func TestOutputFormatRangeFormatUnified(t *testing.T) {
-	// Per the diff spec at http://www.unix.org/single_unix_specification/
-	//
-	// Each <range> field shall be of the form:
-	//   %1d", <beginning line number>  if the range contains exactly one line,
-	// and:
-	//  "%1d,%1d", <beginning line number>, <number of lines> otherwise.
-	// If a range is empty, its beginning line number shall be the number of
-	// the line just before the range, or 0 if the empty range starts the file.
-	fm := formatRangeUnified
-	assertEqual(t, fm(3, 3), "3,0")
-	assertEqual(t, fm(3, 4), "4")
-	assertEqual(t, fm(3, 5), "4,2")
-	assertEqual(t, fm(3, 6), "4,3")
-	assertEqual(t, fm(0, 0), "0,0")
-}
-
-func TestOutputFormatRangeFormatContext(t *testing.T) {
-	// Per the diff spec at http://www.unix.org/single_unix_specification/
-	//
-	// The range of lines in file1 shall be written in the following format
-	// if the range contains two or more lines:
-	//     "*** %d,%d ****\n", <beginning line number>, <ending line number>
-	// and the following format otherwise:
-	//     "*** %d ****\n", <ending line number>
-	// The ending line number of an empty range shall be the number of the preceding line,
-	// or 0 if the range is at the start of the file.
-	//
-	// Next, the range of lines in file2 shall be written in the following format
-	// if the range contains two or more lines:
-	//     "--- %d,%d ----\n", <beginning line number>, <ending line number>
-	// and the following format otherwise:
-	//     "--- %d ----\n", <ending line number>
-	fm := formatRangeContext
-	assertEqual(t, fm(3, 3), "3")
-	assertEqual(t, fm(3, 4), "4")
-	assertEqual(t, fm(3, 5), "4,5")
-	assertEqual(t, fm(3, 6), "4,6")
-	assertEqual(t, fm(0, 0), "0")
-}
-
-func TestOutputFormatTabDelimiter(t *testing.T) {
-	diff := UnifiedDiff{
-		A:        splitChars("one"),
-		B:        splitChars("two"),
-		FromFile: "Original",
-		FromDate: "2005-01-26 23:30:50",
-		ToFile:   "Current",
-		ToDate:   "2010-04-12 10:20:52",
-		Eol:      "\n",
-	}
-	ud, err := GetUnifiedDiffString(diff)
-	assertEqual(t, err, nil)
-	assertEqual(t, SplitLines(ud)[:2], []string{
-		"--- Original\t2005-01-26 23:30:50\n",
-		"+++ Current\t2010-04-12 10:20:52\n",
-	})
-	cd, err := GetContextDiffString(ContextDiff(diff))
-	assertEqual(t, err, nil)
-	assertEqual(t, SplitLines(cd)[:2], []string{
-		"*** Original\t2005-01-26 23:30:50\n",
-		"--- Current\t2010-04-12 10:20:52\n",
-	})
-}
-
 func TestOutputFormatNoTrailingTabOnEmptyFiledate(t *testing.T) {
 	diff := UnifiedDiff{
 		A:        splitChars("one"),

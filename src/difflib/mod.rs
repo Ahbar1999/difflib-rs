@@ -619,27 +619,9 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     
         return calculate_ratio(min(la, lb), la + lb); 
     }
-
-    // Convert range to the "ed" format
-    fn format_range_unified(start: usize, stop: usize) -> String {
-        // Per the diff spec at http://www.unix.org/single_unix_specification/
-        let mut beginning = start + 1;    // lines start numbering with one
-        let length = stop - start;
-
-        if length == 1 {
-            return format!("{:?}", beginning);
-        }
-
-        if length == 0 {
-            beginning -= 1; // empty ranges begin at line just before the range
-        }
-        
-        return format!("{:?},{:?}", beginning, length);
-    }
-
-    // Unified diff parameters
 }
 
+// Unified diff parameters
 pub struct UnifiedDiff<'life_of_a, 'life_of_b, 'life_of_self> {
     pub a:          Option<&'life_of_self Vec<&'life_of_a str>>,     // first sequence line 
     pub from_file:  String,
@@ -667,7 +649,7 @@ impl<'life_of_a, 'life_of_b, 'life_of_self> UnifiedDiff<'life_of_a, 'life_of_b, 
 }
 
 // Convert range to the "ed" format
-fn format_range_unified(start: usize, stop: usize) -> String {
+pub fn format_range_unified(start: usize, stop: usize) -> String {
     // Per the diff spec at http://www.unix.org/single_unix_specification/
 	let mut beginning = start + 1; // lines start numbering with one
 	let length = stop - start;
@@ -762,7 +744,7 @@ pub fn get_unified_diff_string(diff: &mut UnifiedDiff) -> Result<String, std::io
     Ok(String::from_utf8( buf.into_inner().ok().unwrap()).expect("Found invalid utf-8 string"))
 }
 
-fn format_range_context(start: usize, stop: usize) -> String {
+pub fn format_range_context(start: usize, stop: usize) -> String {
    // Per the diff spec at http://www.unix.org/single_unix_specification/
 	let mut beginning = start + 1; // lines start numbering with one
 	let length= stop - start;
