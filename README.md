@@ -4,5 +4,5 @@ no ai slop involved
 
 done purely for the love of the game
 
-## Execution Time: GO vs Rust
+## Execution Time: Rust vs GO
 ![Benchmarks: Rust vs GO](./results.png)
