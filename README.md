@@ -4,5 +4,8 @@ no ai slop involved
 
 done purely for the love of the game
 
-## Execution Time: Rust vs GO
+
+## Benchmarks: Rust vs GO
+### ✅10x execution time reduction
+### ✅Compiletime Memory Safety
 ![Benchmarks: Rust vs GO](./results.png)
