@@ -4,4 +4,4 @@ no ai slop involved
 
 done purely for the love of the game
 
-![Benchmarks: GO vs Rust][./results.png]
+![Benchmarks: GO vs Rust](./results.png)
