@@ -23,7 +23,7 @@ mod tests {
     }
     
     #[test]
-    fn test_get_opt_codes() {
+    fn test_get_op_codes() {
         const A: &str = "qabxcd";
         let mut buf_a  = [0 as u8; A.len()]; 
         
@@ -98,12 +98,12 @@ mod tests {
     
     #[test]
     fn example_get_unified_diff_code() {
-        let a = "one\ntwo\nthree\nfour\nfmt.Printf(\"%s,%T\",a,b)";
-        let b = "zero\none\nthree\nfour";
+        let a: Vec<&str> = "one\ntwo\nthree\nfour\nfmt.Printf(\"%s,%T\",a,b)\n".split_inclusive("\n").collect();
+        let b: Vec<&str> = "zero\none\nthree\nfour\n".split_inclusive("\n").collect();
 
         let mut diff  = UnifiedDiff {
-            a:        Some(&a.lines().collect()),
-            b:        Some(&b.lines().collect()),
+            a:        Some(&a),
+            b:        Some(&b),
             from_file: "Original".to_owned(),
             from_date: "2005-01-26 23:30:50".to_owned(),
             to_file:   "Current".to_owned(),
@@ -128,12 +128,12 @@ mod tests {
     
     #[test]
     fn example_get_context_diff_code() {
-        let a = "one\ntwo\nthree\nfour";
-        let b = "zero\none\ntree\nfour";
-
+        let a: Vec<&str> = "one\ntwo\nthree\nfour\nfmt.Printf(\"%s,%T\",a,b)\n".split_inclusive('\n').collect();
+        let b: Vec<&str> = "zero\none\ntree\nfour\n".split_inclusive('\n').collect();
+        
         let mut diff = ContextDiff {
-            a:        Some(&a.lines().collect()),
-            b:        Some(&b.lines().collect()),
+            a:        Some(&a),
+            b:        Some(&b),
             from_file: "Original".to_owned(),
             from_date: "".to_owned(),
             to_file:   "Current".to_owned(),
@@ -163,6 +163,41 @@ mod tests {
         //   four
     }
     
+    #[test]
+    fn example_get_context_diff_string() {
+        let a = "one\ntwo\nthree\nfour\n".split_inclusive("\n").collect::<Vec<_>>();
+        let b = "zero\none\ntree\nfour\n".split_inclusive("\n").collect::<Vec<_>>();
+        
+        let mut diff = ContextDiff {
+            a:        Some(&a),
+            b:        Some(&b),
+            from_file: "Original".to_owned(),
+            to_file:   "Current".to_owned(),
+            from_date: "".to_owned(),
+            to_date: "".to_owned(),
+            context:  3,
+            eol:      "\n".to_owned(),
+        };
+        
+        let result = get_context_diff_string(&mut diff).ok().unwrap();
+        println!("example_get_context_diff_string(): {}", result.replacen("\t", " ", result.len()));
+        // Output:
+        // *** Original
+        // --- Current
+        // ***************
+        // *** 1,4 ****
+        //   one
+        // ! two
+        // ! three
+        //   four
+        // --- 1,4 ----
+        // + zero
+        //   one
+        // ! tree
+        //   four
+    }
+
+
     #[test]
     fn test_with_ascii_one_insert() {
         let mut a = "b".repeat(100);
@@ -375,91 +410,73 @@ mod tests {
             "--- Current\t2010-04-12 10:20:52\n",
         ]);
     }
-/*
-func TestOutputFormatNoTrailingTabOnEmptyFiledate(t *testing.T) {
-	diff := UnifiedDiff{
-		A:        splitChars("one"),
-		B:        splitChars("two"),
-		FromFile: "Original",
-		ToFile:   "Current",
-		Eol:      "\n",
-	}
-	ud, err := GetUnifiedDiffString(diff)
-	assertEqual(t, err, nil)
-	assertEqual(t, SplitLines(ud)[:2], []string{"--- Original\n", "+++ Current\n"})
+    
+    #[test]
+    fn test_output_format_no_trailing_tab_on_empty_filedate() {
+        let a = "one";
+        let mut buf_a = vec![0 as u8; a.len()];
+        let b = "two";
+        let mut buf_b = vec![0 as u8; b.len()];
 
-	cd, err := GetContextDiffString(ContextDiff(diff))
-	assertEqual(t, err, nil)
-	assertEqual(t, SplitLines(cd)[:2], []string{"*** Original\n", "--- Current\n"})
-}
+        let mut diff = UnifiedDiff{
+            a:        Some(&chars_to_strs(&a, &mut buf_a)),
+            b:        Some(&chars_to_strs(&b, &mut buf_b)),
+            from_file: "Original".to_owned(),
+            to_file:   "Current".to_owned(),
+            from_date: "".to_owned(),
+            to_date  : "".to_owned(),
+            context:    usize::MAX,
+            eol:       "\n".to_owned(),
+        };
 
-func TestOmitFilenames(t *testing.T) {
-	diff := UnifiedDiff{
-		A:   SplitLines("o\nn\ne\n"),
-		B:   SplitLines("t\nw\no\n"),
-		Eol: "\n",
-	}
-	ud, err := GetUnifiedDiffString(diff)
-	assertEqual(t, err, nil)
-	assertEqual(t, SplitLines(ud), []string{
-		"@@ -0,0 +1,2 @@\n",
-		"+t\n",
-		"+w\n",
-		"@@ -2,2 +3,0 @@\n",
-		"-n\n",
-		"-e\n",
-		"\n",
-	})
+        let ud = get_unified_diff_string(&mut diff).ok().unwrap();
+        assert_eq!(ud.split_inclusive("\n").collect::<Vec<_>>()[..2], vec!["--- Original\n", "+++ Current\n"]);
 
-	cd, err := GetContextDiffString(ContextDiff(diff))
-	assertEqual(t, err, nil)
-	assertEqual(t, SplitLines(cd), []string{
-		"***************\n",
-		"*** 0 ****\n",
-		"--- 1,2 ----\n",
-		"+ t\n",
-		"+ w\n",
-		"***************\n",
-		"*** 2,3 ****\n",
-		"- n\n",
-		"- e\n",
-		"--- 3 ----\n",
-		"\n",
-	})
-}
-
-func TestSplitLines(t *testing.T) {
-	allTests := []struct {
-		input string
-		want  []string
-	}{
-		{"foo", []string{"foo\n"}},
-		{"foo\nbar", []string{"foo\n", "bar\n"}},
-		{"foo\nbar\n", []string{"foo\n", "bar\n", "\n"}},
-	}
-	for _, test := range allTests {
-		assertEqual(t, SplitLines(test.input), test.want)
-	}
-}
-
-func benchmarkSplitLines(b *testing.B, count int) {
-	str := strings.Repeat("foo\n", count)
-
-	b.ResetTimer()
-
-	n := 0
-	for i := 0; i < b.N; i++ {
-		n += len(SplitLines(str))
-	}
-}
-
-func BenchmarkSplitLines100(b *testing.B) {
-	benchmarkSplitLines(b, 100)
-}
-
-func BenchmarkSplitLines10000(b *testing.B) {
-	benchmarkSplitLines(b, 10000)
-}
-* 
-*/
+        let cd = get_context_diff_string(&mut diff).ok().unwrap();
+        assert_eq!(cd.split_inclusive("\n").collect::<Vec<_>>()[..2], vec!["*** Original\n", "--- Current\n"]);
+    }
+   
+    #[test]
+    fn test_omit_filenames() {
+        let a = "o\nn\ne\n".split_inclusive("\n").collect::<Vec<_>>();
+        let b = "t\nw\no\n".split_inclusive("\n").collect::<Vec<_>>();
+        
+        println!("{:?}", &a);
+        println!("{:?}", &b);
+        let mut diff = UnifiedDiff {
+            a:   Some(&a),
+            b:   Some(&b),
+            to_date : "".to_owned(),
+            to_file : "".to_owned(),
+            from_date : "".to_owned(),
+            from_file : "".to_owned(),
+            eol: "\n".to_owned(),
+            context: 0,
+        };
+    
+        let ud = get_unified_diff_string(&mut diff).ok().unwrap();
+        assert_eq!(ud.split_inclusive("\n").collect::<Vec<_>>(), vec![
+            "@@ -0,0 +1,2 @@\n",
+            "+t\n",
+            "+w\n",
+            "@@ -2,2 +3,0 @@\n",
+            "-n\n",
+            "-e\n",
+        ]);
+        
+        let cd = get_context_diff_string(&mut diff).ok().unwrap();
+        
+        assert_eq!(cd.split_inclusive("\n").collect::<Vec<_>>(), vec![
+            "***************\n",
+            "*** 0 ****\n",
+            "--- 1,2 ----\n",
+            "+ t\n",
+            "+ w\n",
+            "***************\n",
+            "*** 2,3 ****\n",
+            "- n\n",
+            "- e\n",
+            "--- 3 ----\n",
+        ]);
+    }
 }

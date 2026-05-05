@@ -63,16 +63,6 @@ fn calculate_ratio(matches: usize, length: usize) -> f64 {
    1.0 
 }
 
-fn split_lines(s: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-
-    for line in s.split_inclusive('\n') {
-        lines.push(line);
-    }
-    
-    lines
-}
-
 pub struct SequenceMatcher<'life_of_a, 'life_of_b> {
     a: Option<Vec<&'life_of_a str>>,
     b: Option<Vec<&'life_of_b str>>,
@@ -96,7 +86,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             b: None,
             b2j: HashMap::new(),
             is_junk: None,
-            auto_junk: true,
+            auto_junk: false,
             b_junk: HashMap::new(),
             matching_blocks: Vec::new(),
             full_b_count: HashMap::new(),
@@ -115,7 +105,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     } 
 
     fn set_seq1(&mut self, a: Vec<&'life_of_a str>) {
-        if self.a.is_some() && a == *self.a.as_ref().unwrap() {
+        if self.a.is_some() && &a == self.a.as_ref().unwrap() {
             return;
         }
 
@@ -125,7 +115,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     }
      
     fn set_seq2(&mut self, b: Vec<&'life_of_b str>) {
-        if self.b.is_some() && b == *self.b.as_ref().unwrap() {
+        if self.b.is_some() && &b == self.b.as_ref().unwrap() {
             return;
         }
 
@@ -181,7 +171,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             } 
             
             // remove junks from b2j
-            for (s, _) in junk.into_iter() {
+            for (s, _) in junk.iter() {
                 self.b2j.remove(s);
             }
         }
@@ -227,7 +217,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
              
             self.a.as_ref().map(|val| {
                 self.b2j.get(val[i]).map(|indices| {
-                    for &j in indices {
+                    for &j in indices.iter() {
                         if j < blo {
                             continue;
                         }
@@ -416,9 +406,9 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
     // 'i' (insert):   b[j1:j2] should be inserted at a[i1:i1], i1==i2 in this case.
     //
     // 'e' (equal):    a[i1:i2] == b[j1:j2]
-    pub fn get_op_codes(&mut self) -> &Vec<OpCode> {
+    pub fn get_op_codes(&mut self) -> &mut Vec<OpCode> {
         if !self.op_codes.is_empty() {
-            return &self.op_codes;
+            return &mut self.op_codes;
         }
 
         let mut i =0 as usize;
@@ -435,11 +425,11 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             let mut tag = 0 as u8;
 
             if i < m.a && j < m.b {
-                tag = 'r' as u8;
+                tag = b'r';
             } else if i < m.a {
-                tag = 'd' as u8;
+                tag = b'd';
             } else if j < m.b {
-                tag = 'i' as u8;
+                tag = b'i';
             } 
             
             if tag > 0 {
@@ -466,7 +456,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         }
         
         self.op_codes = op_codes_v;  
-        &self.op_codes 
+        &mut self.op_codes 
     }
     
     // Isolate change clusters by eliminating ranges with no changes.
@@ -478,7 +468,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
             n = 3;
         }
         
-        let mut codes= self.get_op_codes().clone();
+        let codes= self.get_op_codes();
         if codes.len() == 0 {
             codes.push(OpCode::new(b'e',0,1,0,1));
         } 
@@ -486,8 +476,10 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         // Fixup leading and trailing groups if they show no changes.
         if codes[0].tag == b'e' {
             let c = &codes[0];
+            
             let i1 = c.i1;
             let i2 = c.i2;
+            
             let j1 = c.j1;
             let j2 = c.j2;
 
@@ -505,6 +497,7 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
 
             let i1 = c.i1;
             let i2 = c.i2;
+
             let j1 = c.j1;
             let j2 = c.j2;
 
@@ -520,9 +513,10 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
         let mut groups = Vec::<_>::new();
         let mut group = Vec::new();
 
-        for c in codes.iter() {
+        for c in codes.into_iter() {
             let mut i1 = c.i1;
             let i2 = c.i2;
+            
             let mut j1 = c.j1;
             let j2 = c.j2;
 
@@ -532,9 +526,10 @@ impl<'life_of_self, 'life_of_b, 'life_of_a> SequenceMatcher<'life_of_a, 'life_of
                 group.push(OpCode::new(c.tag, i1, min(i2, i1 + n), j1, min(j2, j1 +n)));
                 groups.push(group);
                 group = Vec::new();
-                i1 = max(i1, i2 - n);
-                j1 = max(j1, j2 - n);
+                i1 = max(i1, i2.saturating_sub(n));
+                j1 = max(j1, j2.saturating_sub(n));
             }
+
             group.push(OpCode::new(c.tag, i1, i2, j1, j2)); 
         }
 
@@ -671,13 +666,14 @@ pub fn write_unified_diff(writer: &mut impl std::io::Write, diff: &mut UnifiedDi
     }
 
     let mut started = false;
+
     let mut m = SequenceMatcher::new(
         diff.a.as_ref().unwrap().to_vec(), 
         diff.b.as_ref().unwrap().to_vec()); 
-    
+   
     let groups = m.get_grouped_op_codes(diff.context);
-    // println!("{:?}", groups);
-    for g in groups{
+
+    for g in groups.iter() {
         if !started {
             started = true;
             let mut from_date = String::new();
@@ -700,8 +696,8 @@ pub fn write_unified_diff(writer: &mut impl std::io::Write, diff: &mut UnifiedDi
         let last = g.last().unwrap();
         
         let range1 = format_range_unified(first.i1, last.i2);
-        let range2 = format_range_unified(first.j2, last.j2);
-        
+        let range2 = format_range_unified(first.j1, last.j2);
+       
         writer.write(format!("@@ -{} +{} @@{}", range1, range2, diff.eol).as_bytes())?;
         
         for c in g.iter() {
@@ -712,20 +708,20 @@ pub fn write_unified_diff(writer: &mut impl std::io::Write, diff: &mut UnifiedDi
 
             if c.tag == b'e' {
                 for line in &diff.a.as_ref().unwrap()[i1..i2] {
-                    writer.write(format!(" {}\n", line).as_bytes())?;
+                    writer.write(format!(" {}", line).as_bytes())?;
                 }
                 continue;
             }
 
             if c.tag == b'r' || c.tag == b'd' {
                 for line in &diff.a.as_ref().unwrap()[i1..i2] {
-                    writer.write(format!("-{}\n", line).as_bytes())?;
+                    writer.write(format!("-{}", line).as_bytes())?;
                 }
             }
 
             if c.tag == b'r' || c.tag == b'i' {
                 for line in &diff.b.as_ref().unwrap()[j1..j2] {
-                    writer.write(format!("+{}\n", line).as_bytes())?;
+                    writer.write(format!("+{}", line).as_bytes())?;
                 }
             }
         } 
@@ -779,7 +775,6 @@ pub type ContextDiff<'life_of_a, 'life_of_b, 'life_of_self> = UnifiedDiff<'life_
 // If not specified, the strings default to blanks.
 
 fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -> Result<(), std::io::Error> {
-	
     if diff.eol.len() == 0 {
 		diff.eol = "\n".to_owned();
 	}
@@ -832,7 +827,7 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 						continue;
 					}
 					for line in &diff.a.as_ref().unwrap()[cc.i1..cc.i2] {
-		                writer.write(format!("{}\n", prefix[&cc.tag].to_owned() + &line).as_bytes())?;
+		                writer.write(format!("{}{}", &prefix[&cc.tag].to_owned(), &line).as_bytes())?;
 					}
 				}
 				break;
@@ -849,7 +844,7 @@ fn write_context_diff(mut writer: impl std::io::Write, diff: &mut ContextDiff) -
 						continue;
 					}
 					for line in &diff.b.as_ref().unwrap()[cc.j1..cc.j2] {
-					    writer.write(format!("{}{}\n", &prefix[&cc.tag], &line).as_bytes())?;	
+					    writer.write(format!("{}{}", &prefix[&cc.tag], &line).as_bytes())?;	
 					}
 				}
 				break;
